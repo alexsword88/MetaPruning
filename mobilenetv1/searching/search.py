@@ -1,25 +1,29 @@
-import os
-import sys
-import shutil
-import pickle
-import numpy as np
-import time, datetime
-import torch
-import random
-import logging
 import argparse
-import torch.nn as nn
-import torch.utils
+import datetime
+import logging
+import os
+import pickle
+import random
+import shutil
+import sys
+import time
+
+import numpy as np
+import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+import torch.nn as nn
+import torch.utils
 import torch.utils.data.distributed
+
 import model_for_FLOPs
 
 sys.path.append("../../")
-from utils.utils import *
-from cal_FLOPs import print_model_parm_flops
-from torchvision import datasets, transforms
 from torch.autograd import Variable
+from torchvision import datasets, transforms
+from utils.utils import *
+
+from cal_FLOPs import print_model_parm_flops
 from mobilenet_v1 import MobileNetV1, channel_scale
 
 sys.setrecursionlimit(10000)
@@ -27,16 +31,39 @@ sys.setrecursionlimit(10000)
 parser = argparse.ArgumentParser("MobileNetV1")
 parser.add_argument('--max_iters', type=int, default=20)
 parser.add_argument('--net_cache', type=str, default='../training/models/checkpoint.pth.tar', help='model to be loaded')
-parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
 parser.add_argument('--batch_size', type=int, default=1000, help='batch size')
 parser.add_argument('--save_dict_name', type=str, default='save_dict.txt')
 parser.add_argument('-j', '--workers', default=40, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 args = parser.parse_args()
 
+CLASSES = (
+        "beaver", "dolphin", "otter", "seal", "whale",
+        "aquarium fish", "flatfish", "ray", "shark", "trout",
+        "orchids", "poppies", "roses", "sunflowers", "tulips",
+        "bottles", "bowls", "cans", "cups", "plates",
+        "apples", "mushrooms", "oranges", "pears", "sweet peppers",
+        "clock", "computer keyboard", "lamp", "telephone", "television",
+        "bed", "chair", "couch", "table", "wardrobe",
+        "bee", "beetle", "butterfly", "caterpillar", "cockroach",
+        "bear", "leopard", "lion", "tiger", "wolf",
+        "bridge", "castle", "house", "road", "skyscraper",
+        "cloud", "forest", "mountain", "plain", "sea",
+        "camel", "cattle", "chimpanzee", "elephant", "kangaroo",
+        "fox", "porcupine", "possum", "raccoon", "skunk",
+        "crab", "lobster", "snail", "spider", "worm",
+        "baby", "boy", "girl", "man", "woman",
+        "crocodile", "dinosaur", "lizard", "snake", "turtle",
+        "hamster", "mouse", "rabbit", "shrew", "squirrel",
+        "maple", "oak", "palm", "pine", "willow",
+        "bicycle", "bus", "motorcycle", "pickup truck", "train",
+        "lawn-mower", "rocket", "streetcar", "tank", "tractor",
+    )
+NUM_CLASSES = len(CLASSES)
+
 # use a model_for_flops to infer the flops of selected model
 # you may also calculate the flops by hand
-model_for_flops = model_for_FLOPs.MobileNetV1().cuda()
+model_for_flops = model_for_FLOPs.MobileNetV1(num_classes=NUM_CLASSES).cuda()
 max_FLOPs = 330
 
 # file for save the intermediate searched results
@@ -62,25 +89,27 @@ train_transforms = transforms.Compose([
     transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
     normalize])
-
-train_dataset = datasets.ImageFolder(
-    traindir,
-    transform=train_transforms)
-
+val_transforms = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    normalize,
+])
+train_dataset = datasets.CIFAR100("./CIFAR100",
+            download=True,
+            train=True,
+            transform=train_transforms)
+val_dataset = datasets.CIFAR100("./CIFAR100",
+            download=True,
+            train=False,
+            transform=val_transforms)
 train_loader = torch.utils.data.DataLoader(
     train_dataset, batch_size=args.batch_size, shuffle=True,
     num_workers=args.workers, pin_memory=True)
-
-# load validation data
 val_loader = torch.utils.data.DataLoader(
-    datasets.ImageFolder(valdir, transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        normalize,
-    ])),
-    batch_size=args.batch_size, shuffle=False,
-    num_workers=args.workers, pin_memory=True)
+        val_dataset,
+        batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=True)
 
 # infer the accuracy of a selected pruned net (identidyed with ids)
 def infer(model, criterion, ids):

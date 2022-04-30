@@ -1,12 +1,12 @@
+import math
+from collections import OrderedDict
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from collections import OrderedDict
 from torch.nn import init
-import math
-
-import numpy as np
 
 channel_scale = []
 for i in range(31):
@@ -85,7 +85,7 @@ class MobileNetV1(nn.Module):
         #self.feature.append(dw3x3_pw1x1(1024, 1024, 1))
 
         self.pool1 = nn.AvgPool2d(7)
-        self.fc = nn.Linear(1024, 1000)
+        self.fc = nn.Linear(1024, num_classes)
 
     def forward(self, x):
 
@@ -100,4 +100,3 @@ class MobileNetV1(nn.Module):
 
 if __name__ == "__main__":
     model = MobileNetV1()
-    print(model)

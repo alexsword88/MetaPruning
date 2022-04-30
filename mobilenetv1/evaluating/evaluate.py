@@ -1,22 +1,25 @@
-import os
-import sys
-import shutil
-import numpy as np
-import time, datetime
-import torch
-import random
-import logging
 import argparse
-import torch.nn as nn
-import torch.utils
+import datetime
+import logging
+import os
+import random
+import shutil
+import sys
+import time
+
+import numpy as np
+import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+import torch.nn as nn
+import torch.utils
 import torch.utils.data.distributed
 
 sys.path.append("../../")
-from utils.utils import *
-from torchvision import datasets, transforms
 from torch.autograd import Variable
+from torchvision import datasets, transforms
+from utils.utils import *
+
 from mobilenet_v1 import MobileNetV1, channel_scale
 
 parser = argparse.ArgumentParser("MobileNetV1")
@@ -26,14 +29,35 @@ parser.add_argument('--learning_rate', type=float, default=0.5, help='init learn
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
 parser.add_argument('--weight_decay', type=float, default=4e-5, help='weight decay')
 parser.add_argument('--save', type=str, default='./models', help='path for saving trained models')
-parser.add_argument('--data', metavar='DIR', help='path to dataset')
 parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoothing')
 parser.add_argument('--print_freq', type=float, default=1, help='report frequency')
 parser.add_argument('-j', '--workers', default=40, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 args = parser.parse_args()
 
-CLASSES = 1000
+CLASSES = (
+        "beaver", "dolphin", "otter", "seal", "whale",
+        "aquarium fish", "flatfish", "ray", "shark", "trout",
+        "orchids", "poppies", "roses", "sunflowers", "tulips",
+        "bottles", "bowls", "cans", "cups", "plates",
+        "apples", "mushrooms", "oranges", "pears", "sweet peppers",
+        "clock", "computer keyboard", "lamp", "telephone", "television",
+        "bed", "chair", "couch", "table", "wardrobe",
+        "bee", "beetle", "butterfly", "caterpillar", "cockroach",
+        "bear", "leopard", "lion", "tiger", "wolf",
+        "bridge", "castle", "house", "road", "skyscraper",
+        "cloud", "forest", "mountain", "plain", "sea",
+        "camel", "cattle", "chimpanzee", "elephant", "kangaroo",
+        "fox", "porcupine", "possum", "raccoon", "skunk",
+        "crab", "lobster", "snail", "spider", "worm",
+        "baby", "boy", "girl", "man", "woman",
+        "crocodile", "dinosaur", "lizard", "snake", "turtle",
+        "hamster", "mouse", "rabbit", "shrew", "squirrel",
+        "maple", "oak", "palm", "pine", "willow",
+        "bicycle", "bus", "motorcycle", "pickup truck", "train",
+        "lawn-mower", "rocket", "streetcar", "tank", "tractor",
+    )
+NUM_CLASSES = len(CLASSES)
 
 if not os.path.exists('log'):
     os.mkdir('log')
@@ -56,13 +80,12 @@ def main():
     logging.info("args = %s", args)
 
     # load model
-    model = MobileNetV1()
-    logging.info(model)
-    model = nn.DataParallel(model).cuda()
+    model = MobileNetV1(num_classes=NUM_CLASSES)
+    model = model.cuda()
 
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
-    criterion_smooth = CrossEntropyLabelSmooth(CLASSES, args.label_smooth)
+    criterion_smooth = CrossEntropyLabelSmooth(NUM_CLASSES, args.label_smooth)
     criterion_smooth = criterion_smooth.cuda()
 
     # split the weight parameter that need weight decay
@@ -103,8 +126,6 @@ def main():
         scheduler.step()
 
     # load training data
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
@@ -117,25 +138,27 @@ def main():
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         normalize])
-
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transform=train_transforms)
-
+    val_transforms = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize,
+    ])
+    train_dataset = datasets.CIFAR100("./CIFAR100",
+             download=True,
+             train=True,
+             transform=train_transforms)
+    val_dataset = datasets.CIFAR100("./CIFAR100",
+                download=True,
+                train=False,
+                transform=val_transforms)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True)
-
-    # load validation data
     val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+            val_dataset,
+            batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True)
 
     # train the model
     epoch = start_epoch

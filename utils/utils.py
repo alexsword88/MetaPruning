@@ -1,17 +1,19 @@
-import os
-import sys
-import shutil
-import numpy as np
-import time, datetime
-import torch
-import random
-import logging
 import argparse
+import datetime
+import logging
+import os
+import random
+import shutil
+import sys
+import time
+
+import numpy as np
+import torch
+import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.utils
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
-import torch.backends.cudnn as cudnn
 from PIL import Image
 from torch.autograd import Variable
 
@@ -142,6 +144,6 @@ def accuracy(output, target, topk=(1,)):
 
         res = []
         for k in topk:
-            correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+            correct_k = correct[:k].contiguous().view(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res

@@ -1,2 +1,2 @@
 clear
-python3 evaluate.py --data=/mnt/local0/imagenet_dataset | tee -a log/training.txt
+python3 evaluate.py --batch_size=256 --workers=2 | tee -a log/training.txt
