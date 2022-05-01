@@ -63,7 +63,7 @@ NUM_CLASSES = len(CLASSES)
 
 # use a model_for_flops to infer the flops of selected model
 # you may also calculate the flops by hand
-model_for_flops = model_for_FLOPs.MobileNetV1(num_classes=NUM_CLASSES).cuda()
+model_for_flops = model_for_FLOPs.MobileNetV1(num_classes=NUM_CLASSES) # .cuda()
 max_FLOPs = 330
 
 # file for save the intermediate searched results
@@ -75,8 +75,6 @@ if os.path.exists(args.save_dict_name):
     print(save_dict, flush=True)
 
 # load training data
-traindir = os.path.join(args.data, 'train')
-valdir = os.path.join(args.data, 'val')
 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
 
@@ -116,7 +114,7 @@ def infer(model, criterion, ids):
 
     # calculate flops using model_for_flops
     global model_for_flops
-    model_for_flops = model_for_FLOPs.MobileNetV1().cuda()
+    model_for_flops = model_for_FLOPs.MobileNetV1() # .cuda()
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -139,8 +137,8 @@ def infer(model, criterion, ids):
             if i >= 100:
                 break
             data_time.update(time.time() - end)
-            images = images.cuda()
-            target = target.cuda()
+            # images = images.cuda()
+            # target = target.cuda()
 
             logits = model(images, ids.astype(np.int))
             del logits
@@ -150,8 +148,8 @@ def infer(model, criterion, ids):
     with torch.no_grad():
         end = time.time()
         for i, (images, target) in enumerate(val_loader):
-            images = images.cuda()
-            target = target.cuda()
+            # images = images.cuda()
+            # target = target.cuda()
 
             # compute output
             logits = model(images, ids.astype(np.int))
@@ -310,7 +308,7 @@ def search(model, criterion, num_states):
         start_iter = data['iter'] + 1
 
     for iter in range(start_iter, args.max_iters):
-        model_for_flops = model_for_FLOPs.MobileNetV1().cuda()
+        model_for_flops = model_for_FLOPs.MobileNetV1() # .cuda()
 
         candidates, cnt = test_candidates_model(model, criterion, candidates, cnt, test_dict)
         keep_top_50 = select(candidates, keep_top_50, select_num)
@@ -348,9 +346,9 @@ def run():
     print('net_cache : ', args.net_cache)
 
     criterion = nn.CrossEntropyLoss()
-    criterion = criterion.cuda()
-    model = MobileNetV1()
-    model = nn.DataParallel(model.cuda())
+    # criterion = criterion.cuda()
+    model = MobileNetV1(num_classes=NUM_CLASSES)
+    # model = model.cuda()
 
     if os.path.exists(args.net_cache):
         print('loading checkpoint {} ..........'.format(args.net_cache))

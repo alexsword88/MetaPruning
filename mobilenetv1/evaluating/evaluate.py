@@ -81,6 +81,7 @@ def main():
 
     # load model
     model = MobileNetV1(num_classes=NUM_CLASSES)
+    logging.info(model)
     model = model.cuda()
 
     criterion = nn.CrossEntropyLoss()
