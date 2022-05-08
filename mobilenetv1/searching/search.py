@@ -114,7 +114,7 @@ def infer(model, criterion, ids):
 
     # calculate flops using model_for_flops
     global model_for_flops
-    model_for_flops = model_for_FLOPs.MobileNetV1() # .cuda()
+    model_for_flops = model_for_FLOPs.MobileNetV1(num_classes=NUM_CLASSES) # .cuda()
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -308,7 +308,7 @@ def search(model, criterion, num_states):
         start_iter = data['iter'] + 1
 
     for iter in range(start_iter, args.max_iters):
-        model_for_flops = model_for_FLOPs.MobileNetV1() # .cuda()
+        model_for_flops = model_for_FLOPs.MobileNetV1(num_classes=NUM_CLASSES) # .cuda()
 
         candidates, cnt = test_candidates_model(model, criterion, candidates, cnt, test_dict)
         keep_top_50 = select(candidates, keep_top_50, select_num)
