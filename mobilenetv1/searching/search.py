@@ -93,11 +93,11 @@ val_transforms = transforms.Compose([
     transforms.ToTensor(),
     normalize,
 ])
-train_dataset = datasets.CIFAR100("./CIFAR100",
+train_dataset = datasets.CIFAR100("../../CIFAR100",
             download=True,
             train=True,
             transform=train_transforms)
-val_dataset = datasets.CIFAR100("./CIFAR100",
+val_dataset = datasets.CIFAR100("../../CIFAR100",
             download=True,
             train=False,
             transform=val_transforms)
