@@ -1,2 +1,3 @@
 clear
-python3 train.py --data=/mnt/local0/imagenet_dataset | tee -a log/training.txt
+mkdir log
+python3 -u train.py --batch_size=128 --workers=2 | tee -a log/training.txt

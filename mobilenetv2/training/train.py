@@ -1,22 +1,25 @@
-import os
-import sys
-import shutil
-import numpy as np
-import time, datetime
-import torch
-import random
-import logging
 import argparse
-import torch.nn as nn
-import torch.utils
+import datetime
+import logging
+import os
+import random
+import shutil
+import sys
+import time
+
+import numpy as np
+import torch
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+import torch.nn as nn
+import torch.utils
 import torch.utils.data.distributed
 
 sys.path.append("../../")
-from utils.utils import *
-from torchvision import datasets, transforms
 from torch.autograd import Variable
+from torchvision import datasets, transforms
+from utils.utils import *
+
 from mobilenet_v2 import MobileNetV2, mid_channel_scale, overall_channel_scale
 
 parser = argparse.ArgumentParser("MobileNetV2")
@@ -33,7 +36,29 @@ parser.add_argument('-j', '--workers', default=40, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 args = parser.parse_args()
 
-CLASSES = 1000
+CLASSES = (
+        "beaver", "dolphin", "otter", "seal", "whale",
+        "aquarium fish", "flatfish", "ray", "shark", "trout",
+        "orchids", "poppies", "roses", "sunflowers", "tulips",
+        "bottles", "bowls", "cans", "cups", "plates",
+        "apples", "mushrooms", "oranges", "pears", "sweet peppers",
+        "clock", "computer keyboard", "lamp", "telephone", "television",
+        "bed", "chair", "couch", "table", "wardrobe",
+        "bee", "beetle", "butterfly", "caterpillar", "cockroach",
+        "bear", "leopard", "lion", "tiger", "wolf",
+        "bridge", "castle", "house", "road", "skyscraper",
+        "cloud", "forest", "mountain", "plain", "sea",
+        "camel", "cattle", "chimpanzee", "elephant", "kangaroo",
+        "fox", "porcupine", "possum", "raccoon", "skunk",
+        "crab", "lobster", "snail", "spider", "worm",
+        "baby", "boy", "girl", "man", "woman",
+        "crocodile", "dinosaur", "lizard", "snake", "turtle",
+        "hamster", "mouse", "rabbit", "shrew", "squirrel",
+        "maple", "oak", "palm", "pine", "willow",
+        "bicycle", "bus", "motorcycle", "pickup truck", "train",
+        "lawn-mower", "rocket", "streetcar", "tank", "tractor",
+    )
+NUM_CLASSES = len(CLASSES)
 
 stage_repeat=[1,1,2,3,4,3,3,1]
 
@@ -60,7 +85,7 @@ def main():
 
     model = MobileNetV2()
     logging.info(model)
-    model = nn.DataParallel(model).cuda()
+    model = model.cuda()
 
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
@@ -97,8 +122,6 @@ def main():
         scheduler.step()
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
@@ -110,24 +133,27 @@ def main():
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         normalize])
-
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transform=train_transforms)
-
+    val_transforms = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize,
+    ])
+    train_dataset = datasets.CIFAR100("./CIFAR100",
+             download=True,
+             train=True,
+             transform=train_transforms)
+    val_dataset = datasets.CIFAR100("./CIFAR100",
+                download=True,
+                train=False,
+                transform=val_transforms)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True)
-
     val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+            val_dataset,
+            batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True)
 
     epoch = start_epoch
     while epoch < args.epochs:

@@ -1,12 +1,12 @@
+import math
+from collections import OrderedDict
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from collections import OrderedDict
 from torch.nn import init
-import math
-
-import numpy as np
 
 mid_channel_scale = []
 for i in range(31):
@@ -217,7 +217,7 @@ class MobileNetV2(nn.Module):
 
         #self.conv5 = conv2d_1x1(int(1.4*stage_out_channel[16]), 1280, 1)
         self.pool1 = nn.AvgPool2d(7)
-        self.fc = nn.Linear(1280, 1000)
+        self.fc = nn.Linear(1280, num_classes)
 
     def forward(self, x, mid_scale_ids, stage_oup_scale_ids):
 
@@ -239,4 +239,3 @@ class MobileNetV2(nn.Module):
 
 if __name__ == "__main__":
     model = MobileNetV2()
-    print(model)
