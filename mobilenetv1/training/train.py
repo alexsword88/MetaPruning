@@ -36,7 +36,6 @@ parser.add_argument('-j', '--workers', default=40, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 args = parser.parse_args()
 
-
 CLASSES = (
         "beaver", "dolphin", "otter", "seal", "whale",
         "aquarium fish", "flatfish", "ray", "shark", "trout",
@@ -75,6 +74,7 @@ logging.getLogger().addHandler(fh)
 
 def main():
     if not torch.cuda.is_available():
+        print("no cuda")
         sys.exit(1)
     start_t = time.time()
 

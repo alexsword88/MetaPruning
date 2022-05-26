@@ -3,6 +3,20 @@
 - change multi GPU training to single GPU training
 - change searching from GPU to CPU (for low memory GPU)
 
+# Note
+- if serach need use GPU and run run_gpu script
+- ResNet not test
+
+# Required on windows
+Run below command with administrator permission
+```powershell
+Set-ExecutionPolicy RemoteSigned
+```
+set back powershell policy
+```powershell
+Set-ExecutionPolicy Restricted
+```
+
 # MetaPruning
 
 This is the pytorch implementation of our paper "MetaPruning: Meta Learning for Automatic Neural Network Channel Pruning", https://arxiv.org/abs/1903.10258, published in ICCV 2019. 

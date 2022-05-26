@@ -17,8 +17,11 @@ for i in range(31):
 
 stage_out_channel = [44] + [22] + [33] * 2 + [44] * 3 + [88] * 4 + [132] * 3 + [224] * 3 + [448]
 
-overall_channel_ids = [14, 12, 11, 11, 8, 8, 8, 7, 7, 7, 7, 8, 8, 8, 14, 14, 14, 8]
-mid_channel_ids = [6, 5, 2, 15, 7, 17, 14, 5, 11, 12, 12, 11, 6, 16, 14, 13, 14]
+# overall_channel_ids = [14, 12, 11, 11, 8, 8, 8, 7, 7, 7, 7, 8, 8, 8, 14, 14, 14, 8]
+overall_channel_ids = [26, 23,  8,  8, 28, 28, 28, 26, 26, 26, 26, 16, 16, 16, 21, 21, 21, 19]
+# mid_channel_ids = [6, 5, 2, 15, 7, 17, 14, 5, 11, 12, 12, 11, 6, 16, 14, 13, 14]
+mid_channel_ids = [23, 28, 13, 12, 24,  4,  2, 14, 27,  3, 22, 26,  2, 23, 21, 14, 28]
+
 
 def adapt_channel(overall_channel_ids, mid_channel_ids):
     overall_channel = []
@@ -149,7 +152,7 @@ class MobileNetV2(nn.Module):
 
         #self.conv5 = conv2d_1x1(int(1.4*stage_out_channel[16]), 1280, 1)
         self.pool1 = nn.AvgPool2d(7)
-        self.fc = nn.Linear(1280, 1000)
+        self.fc = nn.Linear(1280, num_classes)
 
     def forward(self, x):
 
@@ -170,5 +173,4 @@ class MobileNetV2(nn.Module):
         return x
 
 if __name__ == "__main__":
-    model = MobileNetV1()
-    print(model)
+    model = MobileNetV2()

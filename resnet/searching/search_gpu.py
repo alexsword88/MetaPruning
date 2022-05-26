@@ -17,7 +17,7 @@ import model_for_FLOPs
 
 sys.path.append("../../")
 from utils.utils import *
-from cal_FLOPs import print_model_parm_flops
+from cal_FLOPs_gpu import print_model_parm_flops
 from torchvision import datasets, transforms
 from torch.autograd import Variable
 from resnet import ResNet50, channel_scale
@@ -131,8 +131,8 @@ def infer(model, criterion, ids):
             if i >= 100:
                 break
             data_time.update(time.time() - end)
-            # images = images.cuda()
-            # target = target.cuda()
+            images = images.cuda()
+            target = target.cuda()
 
             logits = model(images, ids.astype(np.int32))
             del logits
@@ -142,8 +142,8 @@ def infer(model, criterion, ids):
     with torch.no_grad():
         end = time.time()
         for i, (images, target) in enumerate(val_loader):
-            # images = images.cuda()
-            # target = target.cuda()
+            images = images.cuda()
+            target = target.cuda()
 
             # compute output
             logits = model(images, ids.astype(np.int32))
@@ -210,7 +210,7 @@ def get_mutation(keep_top_k, num_states, mutation_num, m_prob, test_dict, untest
         iter += 1
         for can in select_list:
             t_can = tuple(can[:-1])
-            model_for_flops = model_for_FLOPs.resnet50(can[:-1].astype(np.int)) # .cuda()
+            model_for_flops = model_for_FLOPs.resnet50(can[:-1].astype(np.int)).cuda()
             flops = print_model_parm_flops(model_for_flops)
             if t_can in untest_dict.keys() or t_can in test_dict.keys() or flops>max_FLOPs or flops<min_FLOPs:
                 continue
@@ -238,7 +238,7 @@ def get_crossover(keep_top_k, num_states, crossover_num, test_dict, untest_dict)
         can = p1*mask + p2*(1.0-mask)
         iter += 1
         t_can = tuple(can[:-1])
-        model_for_flops = model_for_FLOPs.resnet50(can[:-1].astype(np.int)) # .cuda()
+        model_for_flops = model_for_FLOPs.resnet50(can[:-1].astype(np.int)).cuda()
         flops = print_model_parm_flops(model_for_flops)
         if t_can in untest_dict.keys() or t_can in test_dict.keys() or flops>max_FLOPs or flops<min_FLOPs:
             continue
@@ -257,7 +257,7 @@ def random_can(num, num_states, test_dict, untest_dict):
     while(len(candidates))<num:
         can = np.random.randint(low=int(0.4*len(channel_scale)), high=int(0.8*len(channel_scale)), size=(num_states+1)).astype(np.float32)
         t_can = tuple(can[:-1])
-        model_for_flops = model_for_FLOPs.resnet50(can[:-1].astype(np.int)) # .cuda()
+        model_for_flops = model_for_FLOPs.resnet50(can[:-1].astype(np.int)).cuda()
         flops = print_model_parm_flops(model_for_flops)
         print (flops,flush=True)
         if t_can in test_dict.keys() or t_can in untest_dict.keys() or flops>max_FLOPs or flops<min_FLOPs:
@@ -342,9 +342,9 @@ def run():
     print('net_cache : ', args.net_cache)
 
     criterion = nn.CrossEntropyLoss()
-    # criterion = criterion.cuda()
+    criterion = criterion.cuda()
     model = ResNet50(num_classes=NUM_CLASSES)
-    # model = model.cuda()
+    model = model.cuda()
 
     if os.path.exists(args.net_cache):
         print('loading checkpoint {} ..........'.format(args.net_cache))

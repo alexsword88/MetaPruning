@@ -24,7 +24,7 @@ from mobilenet_v1 import MobileNetV1, channel_scale
 
 parser = argparse.ArgumentParser("MobileNetV1")
 parser.add_argument('--batch_size', type=int, default=1024, help='batch size')
-parser.add_argument('--epochs', type=int, default=256, help='num of training epochs')
+parser.add_argument('--epochs', type=int, default=64, help='num of training epochs')
 parser.add_argument('--learning_rate', type=float, default=0.5, help='init learning rate')
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
 parser.add_argument('--weight_decay', type=float, default=4e-5, help='weight decay')

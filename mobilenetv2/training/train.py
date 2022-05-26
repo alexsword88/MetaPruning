@@ -83,13 +83,13 @@ def main():
     cudnn.enabled=True
     logging.info("args = %s", args)
 
-    model = MobileNetV2()
+    model = MobileNetV2(num_classes=NUM_CLASSES)
     logging.info(model)
     model = model.cuda()
 
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
-    criterion_smooth = CrossEntropyLabelSmooth(CLASSES, args.label_smooth)
+    criterion_smooth = CrossEntropyLabelSmooth(NUM_CLASSES, args.label_smooth)
     criterion_smooth = criterion_smooth.cuda()
 
     all_parameters = model.parameters()
@@ -149,11 +149,11 @@ def main():
                 transform=val_transforms)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True)
+        num_workers=args.workers, pin_memory=False)
     val_loader = torch.utils.data.DataLoader(
             val_dataset,
             batch_size=args.batch_size, shuffle=False,
-            num_workers=args.workers, pin_memory=True)
+            num_workers=args.workers, pin_memory=False)
 
     epoch = start_epoch
     while epoch < args.epochs:

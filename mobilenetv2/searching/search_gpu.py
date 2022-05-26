@@ -17,14 +17,14 @@ import model_for_FLOPs
 
 sys.path.append("../../")
 from utils.utils import *
-from cal_FLOPs import print_model_parm_flops
+from cal_FLOPs_gpu import print_model_parm_flops
 from torchvision import datasets, transforms
 from torch.autograd import Variable
-from resnet import ResNet50, channel_scale
+from mobilenet_v2 import MobileNetV2, overall_channel_scale, mid_channel_scale
 
 sys.setrecursionlimit(10000)
 
-parser = argparse.ArgumentParser("ResNet50")
+parser = argparse.ArgumentParser("MobileNetV2")
 parser.add_argument('--max_iters', type=int, default=20)
 parser.add_argument('--net_cache', type=str, default='../training/models/checkpoint.pth.tar', help='model to be loaded')
 parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
@@ -33,7 +33,6 @@ parser.add_argument('--save_dict_name', type=str, default='save_dict.txt')
 parser.add_argument('-j', '--workers', default=40, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 args = parser.parse_args()
-
 CLASSES = (
         "beaver", "dolphin", "otter", "seal", "whale",
         "aquarium fish", "flatfish", "ray", "shark", "trout",
@@ -58,10 +57,9 @@ CLASSES = (
     )
 NUM_CLASSES = len(CLASSES)
 
-stage_repeat = [3, 4, 6, 3]
+stage_repeat=[1,1,2,3,4,3,3,1]
 
-max_FLOPs = 2050
-min_FLOPs = 1950
+max_FLOPs = 330
 
 # file for save the intermediate searched results
 save_dict = {}
@@ -109,6 +107,13 @@ val_loader = torch.utils.data.DataLoader(
 # infer the accuracy of a selected pruned net (identidyed with ids)
 def infer(model, criterion, ids):
 
+    # use a model_for_flops to infer the flops of selected model
+    # you may also calculate the flops by hand
+    global model_for_flops
+    overall_scale_ids = ids[:sum(stage_repeat)].astype(np.int)
+    mid_scale_ids = ids[sum(stage_repeat):].astype(np.int)
+    model_for_flops = model_for_FLOPs.MobileNetV2(overall_scale_ids, mid_scale_ids).cuda()
+
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -131,10 +136,10 @@ def infer(model, criterion, ids):
             if i >= 100:
                 break
             data_time.update(time.time() - end)
-            # images = images.cuda()
-            # target = target.cuda()
+            images = images.cuda()
+            target = target.cuda()
 
-            logits = model(images, ids.astype(np.int32))
+            logits = model(images, overall_scale_ids, mid_scale_ids)
             del logits
 
     # evaluate the corresponding pruned network
@@ -142,11 +147,11 @@ def infer(model, criterion, ids):
     with torch.no_grad():
         end = time.time()
         for i, (images, target) in enumerate(val_loader):
-            # images = images.cuda()
-            # target = target.cuda()
+            images = images.cuda()
+            target = target.cuda()
 
             # compute output
-            logits = model(images, ids.astype(np.int32))
+            logits = model(images, overall_scale_ids, mid_scale_ids)
             loss = criterion(logits, target)
 
             # measure accuracy and record loss
@@ -161,7 +166,6 @@ def infer(model, criterion, ids):
             end = time.time()
 
         print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
-
               .format(top1=top1, top5=top5))
 
     return top1.avg, top5.avg, losses.avg
@@ -204,15 +208,37 @@ def get_mutation(keep_top_k, num_states, mutation_num, m_prob, test_dict, untest
     while len(res)<mutation_num and iter<max_iters:
         ids = np.random.choice(k, mutation_num)
         select_seed = np.array([keep_top_k[id] for id in ids])
-        is_m = np.random.choice(np.arange(0,2), (mutation_num, num_states+1), p=[1-m_prob, m_prob])
-        mu_val = np.random.choice(np.arange(1,len(channel_scale)), (mutation_num, num_states+1))*is_m
-        select_list = ((select_seed + mu_val) % len(channel_scale))
+
+        is_m_part_a = np.random.choice(np.arange(0,2), (mutation_num, len(stage_repeat)), p=[1-m_prob, m_prob])
+        is_m_part_b = np.random.choice(np.arange(0,2), (mutation_num, num_states+1), p=[1-m_prob, m_prob])
+
+        mu_val_part_a = np.random.choice(np.arange(1,len(overall_channel_scale)), (mutation_num, len(stage_repeat)))*is_m_part_a
+        mu_val_part_b = np.random.choice(np.arange(1,len(mid_channel_scale)), (mutation_num, num_states+1))*is_m_part_b
+
+        mu_val = np.zeros([mutation_num, sum(stage_repeat)+num_states+1])
+        j = 0
+        for i in range(len(stage_repeat)):
+            j_prev = j
+            j = j_prev + stage_repeat[i]
+            for p11 in range (j_prev,j):
+                mu_val[:,p11] = mu_val_part_a[:,i]
+
+        mu_val[:, sum(stage_repeat):] = mu_val_part_b
+
+        #mu_val = np.random.choice(np.arange(1,len(channel_scale)), (mutation_num, num_states+1))*is_m
+        select_list = np.zeros([mutation_num, sum(stage_repeat)+num_states+1])
+        select_list[:, :sum(stage_repeat)]  = ((select_seed + mu_val)[:,:sum(stage_repeat)] % len(overall_channel_scale))
+        select_list[:, sum(stage_repeat):] = ((select_seed + mu_val)[:,sum(stage_repeat):] % len(mid_channel_scale))
+
         iter += 1
         for can in select_list:
-            t_can = tuple(can[:-1])
-            model_for_flops = model_for_FLOPs.resnet50(can[:-1].astype(np.int)) # .cuda()
+            t_can = can[:-1]
+            overall_scale_ids = t_can[:sum(stage_repeat)].astype(np.int)
+            mid_scale_ids = t_can[sum(stage_repeat):].astype(np.int)
+            model_for_flops = model_for_FLOPs.MobileNetV2(overall_scale_ids, mid_scale_ids).cuda()
             flops = print_model_parm_flops(model_for_flops)
-            if t_can in untest_dict.keys() or t_can in test_dict.keys() or flops>max_FLOPs or flops<min_FLOPs:
+            t_can = tuple(can[:-1])
+            if t_can in untest_dict.keys() or t_can in test_dict.keys() or flops>max_FLOPs:
                 continue
             can[-1] = flops
             res.append(can)
@@ -223,7 +249,6 @@ def get_mutation(keep_top_k, num_states, mutation_num, m_prob, test_dict, untest
     print('mutation_num = {}'.format(len(res)), flush=True)
     return res
 
-# crossover operation in evolution algorithm
 def get_crossover(keep_top_k, num_states, crossover_num, test_dict, untest_dict):
     print('crossover ......', flush=True)
     res = []
@@ -234,13 +259,22 @@ def get_crossover(keep_top_k, num_states, crossover_num, test_dict, untest_dict)
         id1, id2 = np.random.choice(k, 2, replace=False)
         p1 = keep_top_k[id1]
         p2 = keep_top_k[id2]
-        mask = np.random.randint(low=0, high=2, size=(num_states+1)).astype(np.float32)
+        mask = []
+        for i in range(len(stage_repeat)):
+            mask += [np.random.randint(low=0, high=2)]* stage_repeat[i]
+        for i in range(num_states+1):
+            mask += [np.random.randint(low=0, high=2)]
+        #mask = np.random.randint(low=0, high=2, size=(num_states+1)).astype(np.float32)
+        mask = np.array(mask)
         can = p1*mask + p2*(1.0-mask)
         iter += 1
-        t_can = tuple(can[:-1])
-        model_for_flops = model_for_FLOPs.resnet50(can[:-1].astype(np.int)) # .cuda()
+        t_can = can[:-1]
+        overall_scale_ids = t_can[:sum(stage_repeat)].astype(np.int)
+        mid_scale_ids = t_can[sum(stage_repeat):].astype(np.int)
+        model_for_flops = model_for_FLOPs.MobileNetV2(overall_scale_ids, mid_scale_ids).cuda()
         flops = print_model_parm_flops(model_for_flops)
-        if t_can in untest_dict.keys() or t_can in test_dict.keys() or flops>max_FLOPs or flops<min_FLOPs:
+        t_can = tuple(can[:-1])
+        if t_can in untest_dict.keys() or t_can in test_dict.keys() or flops>max_FLOPs:
             continue
         can[-1] = flops
         res.append(can)
@@ -250,17 +284,26 @@ def get_crossover(keep_top_k, num_states, crossover_num, test_dict, untest_dict)
     print('crossover_num = {}'.format(len(res)), flush=True)
     return res
 
-# random operation in evolution algorithm
+
 def random_can(num, num_states, test_dict, untest_dict):
     print('random select ........', flush=True)
     candidates = []
     while(len(candidates))<num:
-        can = np.random.randint(low=int(0.4*len(channel_scale)), high=int(0.8*len(channel_scale)), size=(num_states+1)).astype(np.float32)
-        t_can = tuple(can[:-1])
-        model_for_flops = model_for_FLOPs.resnet50(can[:-1].astype(np.int)) # .cuda()
+
+        can = []
+        for i in range(len(stage_repeat)):
+            can += [np.random.randint(low=0, high=int(len(overall_channel_scale)))]* stage_repeat[i]
+        for i in range(num_states+1):
+            can += [np.random.randint(low=0, high=int(len(mid_channel_scale)))]
+        #can = np.random.randint(low=0, high=len(overall_channel_scale), size=(num_states+1)).astype(np.float32)
+        can = np.asarray(can).astype(np.float32)
+        t_can = can[:-1]
+        overall_scale_ids = t_can[:sum(stage_repeat)].astype(np.int)
+        mid_scale_ids = t_can[sum(stage_repeat):].astype(np.int)
+        model_for_flops = model_for_FLOPs.MobileNetV2(overall_scale_ids, mid_scale_ids).cuda()
         flops = print_model_parm_flops(model_for_flops)
-        print (flops,flush=True)
-        if t_can in test_dict.keys() or t_can in untest_dict.keys() or flops>max_FLOPs or flops<min_FLOPs:
+        t_can = tuple(can[:-1])
+        if t_can in test_dict.keys() or t_can in untest_dict.keys() or flops>max_FLOPs:
             continue
         can[-1] = flops
         candidates.append(can)
@@ -305,7 +348,6 @@ def search(model, criterion, num_states):
         start_iter = data['iter'] + 1
 
     for iter in range(start_iter, args.max_iters):
-
         candidates, cnt = test_candidates_model(model, criterion, candidates, cnt, test_dict)
         keep_top_50 = select(candidates, keep_top_50, select_num)
         keep_top_k = keep_top_50[0:10]
@@ -342,22 +384,22 @@ def run():
     print('net_cache : ', args.net_cache)
 
     criterion = nn.CrossEntropyLoss()
-    # criterion = criterion.cuda()
-    model = ResNet50(num_classes=NUM_CLASSES)
-    # model = model.cuda()
+    criterion = criterion.cuda()    
+    model = MobileNetV2(num_classes=NUM_CLASSES)
+    model = model.cuda()
 
     if os.path.exists(args.net_cache):
         print('loading checkpoint {} ..........'.format(args.net_cache))
         checkpoint = torch.load(args.net_cache)
         best_top1_acc = checkpoint['best_top1_acc']
         model.load_state_dict(checkpoint['state_dict'])
-        #print("loaded checkpoint {} epoch = {}" .format(args.net_cache, checkpoint['epoch']))
+        print("loaded checkpoint {} epoch = {}" .format(args.net_cache, checkpoint['epoch']))
 
     else:
         print('can not find {} '.format(args.net_cache))
         return
 
-    num_states = len(stage_repeat) + sum(stage_repeat)
+    num_states = 17
     search(model, criterion, num_states)
 
     total_searching_time = time.time() - t

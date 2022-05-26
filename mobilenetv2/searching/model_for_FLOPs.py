@@ -140,7 +140,7 @@ class MobileNetV2(nn.Module):
 
         #self.conv5 = conv2d_1x1(int(1.4*stage_out_channel[16]), 1280, 1)
         self.pool1 = nn.AvgPool2d(7)
-        self.fc = nn.Linear(1280, 1000)
+        self.fc = nn.Linear(1280, num_classes)
 
     def forward(self, x):
 
@@ -161,5 +161,5 @@ class MobileNetV2(nn.Module):
         return x
 
 if __name__ == "__main__":
-    model = MobileNetV1()
+    model = MobileNetV2()
     print(model)

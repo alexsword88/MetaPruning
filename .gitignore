@@ -1,0 +1,6 @@
+CIFAR100
+**/__pycache__
+**/log
+**/models
+**/*.pkl
+**/save_dict.txt

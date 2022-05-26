@@ -1,14 +1,13 @@
 #coding:utf8
-import torch
-import torchvision
-
-import torch.nn as nn
-from torch.autograd import Variable
-import torchvision.models as models
-
 import numpy as np
+import torch
+import torch.nn as nn
+import torchvision
+import torchvision.models as models
+from torch.autograd import Variable
 
-def print_model_parm_flops(one_shot_model):
+
+def print_model_parm_flops(one_shot_model, ids):
     prods = {}
     def save_hook(name):
         def hook_per(self, input, output):
@@ -86,8 +85,8 @@ def print_model_parm_flops(one_shot_model):
             foo(c)
 
     foo(one_shot_model)
-    input = Variable(torch.rand(3,224,224).unsqueeze(0), requires_grad = True) # .cuda()
-    out = one_shot_model(input)
+    input = Variable(torch.rand(3,224,224).unsqueeze(0), requires_grad = True).cuda()
+    out = one_shot_model(input, ids)
 
     total_flops = (sum(list_conv) + sum(list_linear) + sum(list_bn) + sum(list_relu) + sum(list_pooling))
     M_flops = total_flops / 1e6

@@ -21,7 +21,7 @@ from resnet import ResNet50
 
 parser = argparse.ArgumentParser("ResNet50")
 parser.add_argument('--batch_size', type=int, default=512, help='batch size')
-parser.add_argument('--epochs', type=int, default=128, help='num of training epochs')
+parser.add_argument('--epochs', type=int, default=64, help='num of training epochs')
 parser.add_argument('--learning_rate', type=float, default=0.2, help='init learning rate')
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
 parser.add_argument('--weight_decay', type=float, default=1e-4, help='weight decay')
@@ -33,7 +33,29 @@ parser.add_argument('-j', '--workers', default=40, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 args = parser.parse_args()
 
-CLASSES = 1000
+CLASSES = (
+        "beaver", "dolphin", "otter", "seal", "whale",
+        "aquarium fish", "flatfish", "ray", "shark", "trout",
+        "orchids", "poppies", "roses", "sunflowers", "tulips",
+        "bottles", "bowls", "cans", "cups", "plates",
+        "apples", "mushrooms", "oranges", "pears", "sweet peppers",
+        "clock", "computer keyboard", "lamp", "telephone", "television",
+        "bed", "chair", "couch", "table", "wardrobe",
+        "bee", "beetle", "butterfly", "caterpillar", "cockroach",
+        "bear", "leopard", "lion", "tiger", "wolf",
+        "bridge", "castle", "house", "road", "skyscraper",
+        "cloud", "forest", "mountain", "plain", "sea",
+        "camel", "cattle", "chimpanzee", "elephant", "kangaroo",
+        "fox", "porcupine", "possum", "raccoon", "skunk",
+        "crab", "lobster", "snail", "spider", "worm",
+        "baby", "boy", "girl", "man", "woman",
+        "crocodile", "dinosaur", "lizard", "snake", "turtle",
+        "hamster", "mouse", "rabbit", "shrew", "squirrel",
+        "maple", "oak", "palm", "pine", "willow",
+        "bicycle", "bus", "motorcycle", "pickup truck", "train",
+        "lawn-mower", "rocket", "streetcar", "tank", "tractor",
+    )
+NUM_CLASSES = len(CLASSES)
 
 if not os.path.exists('log'):
     os.mkdir('log')
@@ -56,13 +78,13 @@ def main():
     logging.info("args = %s", args)
 
     # load model
-    model = ResNet50()
+    model = ResNet50(num_classes=NUM_CLASSES)
     logging.info(model)
-    model = nn.DataParallel(model).cuda()
+    model = model.cuda()
 
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
-    criterion_smooth = CrossEntropyLabelSmooth(CLASSES, args.label_smooth)
+    criterion_smooth = CrossEntropyLabelSmooth(NUM_CLASSES, args.label_smooth)
     criterion_smooth = criterion_smooth.cuda()
 
     # split the weight parameter that need weight decay
@@ -104,8 +126,6 @@ def main():
         scheduler.step()
 
     # load training data
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
@@ -118,25 +138,27 @@ def main():
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         normalize])
-
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transform=train_transforms)
-
+    val_transforms = transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        normalize,
+    ])
+    train_dataset = datasets.CIFAR100("../../CIFAR100",
+             download=True,
+             train=True,
+             transform=train_transforms)
+    val_dataset = datasets.CIFAR100("../../CIFAR100",
+                download=True,
+                train=False,
+                transform=val_transforms)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=args.workers, pin_memory=True)
-
-    # load validation data
     val_loader = torch.utils.data.DataLoader(
-        datasets.ImageFolder(valdir, transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            normalize,
-        ])),
-        batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+            val_dataset,
+            batch_size=args.batch_size, shuffle=False,
+            num_workers=args.workers, pin_memory=True)
 
     # train the model
     epoch = start_epoch

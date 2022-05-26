@@ -82,13 +82,13 @@ def main():
     cudnn.enabled=True
     logging.info("args = %s", args)
 
-    model = ResNet50()
+    model = ResNet50(num_classes=NUM_CLASSES)
     logging.info(model)
     model = model.cuda()
 
     criterion = nn.CrossEntropyLoss()
     criterion = criterion.cuda()
-    criterion_smooth = CrossEntropyLabelSmooth(CLASSES, args.label_smooth)
+    criterion_smooth = CrossEntropyLabelSmooth(NUM_CLASSES, args.label_smooth)
     criterion_smooth = criterion_smooth.cuda()
 
     all_parameters = model.parameters()
@@ -122,8 +122,6 @@ def main():
         scheduler.step()
 
     # Data loading code
-    traindir = os.path.join(args.data, 'train')
-    valdir = os.path.join(args.data, 'val')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
